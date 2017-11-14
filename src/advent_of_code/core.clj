@@ -2,72 +2,56 @@
   (:require [clojure.string :refer [split]]
             [clojure.java.io :refer [file resource]]))
 
-(defn move-on-the-2d-plane
-  "Moves the Easter Bunny on the 2-D plane by some distance by doing necessary calculations"
-  [[current-orientation current-x current-y] direction distance]
-  (cond
-    ; Movement in the East direction: +X,Y
-    (or (and (= current-orientation "N") (= direction "R")) 
-        (and (= current-orientation "S") (= direction "L")))
-      ["E" (+ current-x distance) current-y]
-    ; Movement in the West direction: -X,Y
-    (or (and (= current-orientation "N") (= direction "L"))
-        (and (= current-orientation "S") (= direction "R")))
-      ["W" (- current-x distance) current-y]
-    ; Movement in the South direction: X,-Y
-    (or (and (= current-orientation "E") (= direction "R"))
-        (and (= current-orientation "W") (= direction "L")))
-      ["S" current-x (- current-y distance)]
-    ; Movement in the North direction: X,+Y
-    (or (and (= current-orientation "E") (= direction "L"))
-        (and (= current-orientation "W") (= direction "R")))
-      ["N" current-x (+ current-y distance)]
-    ; Other cases for no direction; Just moving forward in the current orientation
-    (and (= direction "") (= current-orientation "E"))
-      [current-orientation (+ current-x distance) current-y]
-    (and (= direction "") (= current-orientation "W"))
-      [current-orientation (- current-x distance) current-y]
-    (and (= direction "") (= current-orientation "S"))
-      [current-orientation current-x (- current-y distance)]
-    (and (= direction "") (= current-orientation "N"))
-      [current-orientation current-x (+ current-y distance)]))
+(defn press-keypad
+  "Presses the keypad based upon the direction provided"
+  [[current-x current-y] direction]
+  (condp = direction
+    \R [current-x (if (< current-y 2) (inc current-y) current-y)]
+    \L [current-x (if (> current-y 0) (dec current-y) current-y)]
+    \D [(if (< current-x 2) (inc current-x) current-x) current-y]
+    \U [(if (> current-x 0) (dec current-x) current-x) current-y]))
     
-(defn split-direction-and-distance
-  "Splits direction and distance from a string by applying regex"
+(defn split-direction
+  "Splits directions from a string"
   [s]
-  (let [[[original-string direction distance]] (re-seq #"(R|L)(\d+)" s)]
-    (->> (repeat (dec (Integer/parseInt distance)) 1) ; Moving point by point
-         (map (fn [x] ["" x]))
-         (cons [direction 1])))) ; Prepending the original direction
+  (seq s))
 
 (defn read-instructions
   "Reads instructions from file"  
   [instructions-file]
-  (->> (split (slurp instructions-file) #",\s")
-       (mapv split-direction-and-distance)
-       (reduce concat)))
-      
-(defn calculate-distance
-  "Calculates distance of the Easter Bunny from the headquarters"
-  [instructions [orientation x y :as orientation-location] location-tracker]
-  (if-let [[dir dist] (first instructions)]
-    ; Recursively iterate
-    (let [[new-orientation new-x new-y :as new-orient-loc] (move-on-the-2d-plane orientation-location dir dist)]
-      (if (@location-tracker [new-x new-y])
-        ; If already visited, return distance
-        (+ (Math/abs new-x) (Math/abs new-y))
-        ; Else update location tracker and continue the recursion
-        (do
-          (swap! location-tracker assoc [new-x new-y] 0)
-          (calculate-distance (drop 1 instructions) new-orient-loc location-tracker))))
-    ; Return the distance
-    (+ (Math/abs x) (Math/abs y))))
+  (->> (split (slurp instructions-file) #"\s")
+       (mapv split-direction)))
+
+(defn points->keypad-numbers
+  "Converts 2-D points into keypad numbers (between 1 and 9)"
+  [p]
+  (condp = p
+    [0 0] "1"
+    [0 1] "2"
+    [0 2] "3"
+    [1 0] "4"
+    [1 1] "5"
+    [1 2] "6"
+    [2 0] "7"
+    [2 1] "8"
+    [2 2] "9"))
+
+(defn deduce-code
+  "Deduces code using instructions"
+  [instructions location-tracker]
+  (let [code-tracker (atom [])]
+    (doseq [i instructions]
+      (doseq [direction i]
+        (reset! location-tracker (press-keypad @location-tracker direction)))
+      (swap! code-tracker conj @location-tracker))
+    ; Converting points to numbers on keypad
+    (->> (mapv points->keypad-numbers @code-tracker)
+         (reduce str))))
 
 (defn -main
   []
-  (->> (calculate-distance 
+  (->> (deduce-code
          (read-instructions (file (resource "input.txt"))) ; Instructions
-         ["N" 0 0] ; Initial Orientation and Location
-         (atom {})) ; Initial Location Tracker
+         (atom [1 1])) ; Location Tracker
        prn)) 
 
