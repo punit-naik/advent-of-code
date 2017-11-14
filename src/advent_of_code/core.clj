@@ -36,7 +36,7 @@
   "Splits direction and distance from a string by applying regex"
   [s]
   (let [[[original-string direction distance]] (re-seq #"(R|L)(\d+)" s)]
-    (->> (take (dec (Integer/parseInt distance)) (repeat 1)) ; Moving point by point
+    (->> (repeat (dec (Integer/parseInt distance)) 1) ; Moving point by point
          (map (fn [x] ["" x]))
          (cons [direction 1])))) ; Prepending the original direction
 
